@@ -1,0 +1,30 @@
+name: Image build
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+jobs:
+  build-docker:
+    name: cd/Build and push docker image
+    runs-on: ubuntu-22.04
+    steps:
+      - name: checkout-project
+        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+      - name: cd/Login to Docker Hub
+        uses: docker/login-action@3da7dc6e2b31f99ef2cb9fb4c50fb0971e0d0139 # v2.1.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME}}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: cd/Setup Docker Buildx
+        uses: docker/setup-buildx-action@11e8a2e2910826a92412015c515187a2d6750279 # v2.4
+      - name: cd/Docker build and push
+        env:
+          TAG: ${{ github.ref_name }}
+          PGBOUNCER_VERSION: 1.15.0
+        run: |
+          docker buildx build --push -t mattermost/pgbouncer:${TAG} build/. --build-arg PGBOUNCER_VERSION=${PGBOUNCER_VERSION}
