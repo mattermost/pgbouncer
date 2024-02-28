@@ -5,27 +5,33 @@ FROM --platform=${TARGETPLATFORM} alpine:3.19 AS build_stage
 RUN apk --update --no-cache add \
         autoconf \
         automake \
+        libtool \
+        pkgconfig \
         c-ares-dev \
         curl \
         gcc \
         libc-dev \
         libevent-dev \
-        libtool \
-        make \
         openssl-dev \
         file \
-        pkgconf
-
+        git \
+        pandoc \
+        make && \
+    make --version
 ARG PGBOUNCER_VERSION
 
-# Download, extract, and build PgBouncer
-RUN curl -Lso  "/tmp/pgbouncer.tar.gz" "https://pgbouncer.github.io/downloads/files/${PGBOUNCER_VERSION}/pgbouncer-${PGBOUNCER_VERSION}.tar.gz" && \
-        file "/tmp/pgbouncer.tar.gz" && \
-        mkdir /tmp/pgbouncer && \
-        tar -zxvf /tmp/pgbouncer.tar.gz -C /tmp/pgbouncer --strip-components 1 && \
-        cd /tmp/pgbouncer && \
-        ./configure --prefix=/usr && \
-        make
+# Clone the specific branch, initialize submodules, and run autogen.sh
+RUN git clone --branch pgbouncer-1.20-no-878 https://github.com/JelteF/pgbouncer.git /tmp/pgbouncer && \
+    cd /tmp/pgbouncer && \
+    git submodule init && \
+    git submodule update && \
+    chmod +x ./autogen.sh && \
+    ./autogen.sh
+
+# Extract and build PgBouncer
+RUN cd /tmp/pgbouncer && \
+    ./configure --prefix=/usr && \
+    make
 
 # Create runtime image
 FROM --platform=${TARGETPLATFORM} alpine:3.19
