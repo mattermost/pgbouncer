@@ -21,7 +21,7 @@ RUN apk --update --no-cache add \
 ARG PGBOUNCER_VERSION
 
 # Clone the specific branch, initialize submodules, and run autogen.sh
-RUN git clone --branch pgbouncer-1.20-no-878 https://github.com/JelteF/pgbouncer.git /tmp/pgbouncer && \
+RUN git clone --branch pgbouncer-1.20-no-864 https://github.com/JelteF/pgbouncer.git /tmp/pgbouncer && \
     cd /tmp/pgbouncer && \
     git submodule init && \
     git submodule update && \
