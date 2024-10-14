@@ -1,5 +1,5 @@
 # Use the latest Alpine version
-FROM --platform=${TARGETPLATFORM} alpine:3.19 AS build_stage
+FROM --platform=${TARGETPLATFORM} alpine:3.20 AS build_stage
 
 # Install necessary build dependencies
 RUN apk --update --no-cache add \
