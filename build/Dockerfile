@@ -1,5 +1,5 @@
 # Use the latest Alpine version
-FROM alpine:3.18 AS build_stage
+FROM alpine:3.20 AS build_stage
 
 # Install necessary build dependencies
 RUN apk --update --no-cache add \
