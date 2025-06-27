@@ -1,0 +1,151 @@
+diff --git a/include/common/postgres_compat.h b/include/common/postgres_compat.h
+index 1234567..abcdefg 100644
+--- a/include/common/postgres_compat.h
++++ b/include/common/postgres_compat.h
+@@ -15,6 +15,14 @@
+ #include <usual/base.h>
+ #include <usual/list.h>
+ 
++#ifdef HAVE_OPENSSL
++#include <openssl/evp.h>
++#include <openssl/hmac.h>
++/* Use OpenSSL EVP interface for FIPS compliance */
++#define pg_sha256_ctx EVP_MD_CTX
++#define pg_sha256_init(ctx) EVP_DigestInit_ex(ctx, EVP_sha256(), NULL)
++#define pg_sha256_update(ctx, data, len) EVP_DigestUpdate(ctx, data, len)
++#define pg_sha256_final(ctx, out) EVP_DigestFinal_ex(ctx, out, NULL)
++#else
+ /* Internal crypto */
+ #include <usual/crypto/sha256.h>
+ #define pg_sha256_ctx sha256_ctx
+@@ -22,6 +30,7 @@
+ #define pg_sha256_update sha256_update
+ #define pg_sha256_final sha256_final
+ #define PG_SHA256_DIGEST_LENGTH SHA256_DIGEST_LENGTH
++#endif
+ 
+ /*
+  * PostgreSQL project wrapper for strlcpy/strlcat.
+diff --git a/src/common/scram-common.c b/src/common/scram-common.c
+index 2345678..bcdefgh 100644
+--- a/src/common/scram-common.c
++++ b/src/common/scram-common.c
+@@ -17,6 +17,10 @@
+ #include "common/base64.h"
+ #include "common/hmac.h"
+ 
++#ifdef HAVE_OPENSSL
++#include <openssl/hmac.h>
++#include <openssl/evp.h>
++#endif
+ 
+ /*
+  * Calculate HMAC-SHA-256.
+@@ -24,6 +28,23 @@
+ static void
+ scram_HMAC(const uint8 *key, int keylen, const char *input, int inputlen, uint8 *result)
+ {
++#ifdef HAVE_OPENSSL
++	HMAC_CTX *ctx;
++	unsigned int len;
++
++	ctx = HMAC_CTX_new();
++	if (!ctx)
++		return;
++
++	if (HMAC_Init_ex(ctx, key, keylen, EVP_sha256(), NULL) != 1)
++		goto cleanup;
++	if (HMAC_Update(ctx, (unsigned char *) input, inputlen) != 1)
++		goto cleanup;
++	if (HMAC_Final(ctx, result, &len) != 1)
++		goto cleanup;
++
++cleanup:
++	HMAC_CTX_free(ctx);
++#else
+ 	hmac_sha256_ctx ctx;
+ 
+ 	hmac_sha256_init(&ctx, key, keylen);
+@@ -31,6 +52,7 @@ scram_HMAC(const uint8 *key, int keylen, const char *input, int inputlen, uint8
+ 	hmac_sha256_final(&ctx, result);
+ 
+ 	px_memset(&ctx, 0, sizeof(ctx));
++#endif
+ }
+ 
+ /*
+@@ -39,13 +61,29 @@ scram_HMAC(const uint8 *key, int keylen, const char *input, int inputlen, uint8
+ static void
+ scram_SaltedPassword(const char *password, const char *salt, int saltlen, int iterations, uint8 *result)
+ {
++#ifdef HAVE_OPENSSL
++	HMAC_CTX *ctx;
++	uint8 Ui[SCRAM_SHA_256_DIGEST_LENGTH];
++	uint8 Ui_prev[SCRAM_SHA_256_DIGEST_LENGTH];
++	unsigned int len;
++	int i, j;
++
++	/* Calculate U1 */
++	ctx = HMAC_CTX_new();
++	if (!ctx)
++		return;
++
++	if (HMAC_Init_ex(ctx, (unsigned char *) password, strlen(password), EVP_sha256(), NULL) != 1)
++		goto cleanup;
++	if (HMAC_Update(ctx, (unsigned char *) salt, saltlen) != 1)
++		goto cleanup;
++	if (HMAC_Update(ctx, (unsigned char *) "\0\0\0\1", 4) != 1)
++		goto cleanup;
++	if (HMAC_Final(ctx, Ui_prev, &len) != 1)
++		goto cleanup;
++#else
+ 	hmac_sha256_ctx ctx;
+ 	uint8 Ui[SCRAM_SHA_256_DIGEST_LENGTH];
+ 	uint8 Ui_prev[SCRAM_SHA_256_DIGEST_LENGTH];
+ 	int i, j;
+ 
+-	/*
+-	 * Calculate U1
+-	 */
+ 	hmac_sha256_init(&ctx, (uint8 *) password, strlen(password));
+ 	hmac_sha256_update(&ctx, (uint8 *) salt, saltlen);
+ 	hmac_sha256_update(&ctx, (uint8 *) "\0\0\0\1", 4);
+@@ -53,6 +91,7 @@ scram_SaltedPassword(const char *password, const char *salt, int saltlen, int i
+ 
+ 	memcpy(result, Ui_prev, SCRAM_SHA_256_DIGEST_LENGTH);
+ 	px_memset(&ctx, 0, sizeof(ctx));
++#endif
+ 
+ 	/* Calculate U2, U3, ... */
+ 	for (i = 2; i <= iterations; i++)
+@@ -64,6 +103,15 @@ scram_SaltedPassword(const char *password, const char *salt, int saltlen, int i
+ 			result[j] ^= Ui[j];
+ 	}
+ 
++#ifdef HAVE_OPENSSL
++cleanup:
++	if (ctx)
++		HMAC_CTX_free(ctx);
++	px_memset(Ui, 0, sizeof(Ui));
++	px_memset(Ui_prev, 0, sizeof(Ui_prev));
++	return;
++#endif
++
+ 	px_memset(Ui, 0, sizeof(Ui));
+ 	px_memset(Ui_prev, 0, sizeof(Ui_prev));
+ }
+diff --git a/include/common/scram-common.h b/include/common/scram-common.h
+index 3456789..cdefghi 100644
+--- a/include/common/scram-common.h
++++ b/include/common/scram-common.h
+@@ -14,6 +14,10 @@
+ #ifndef SCRAM_COMMON_H
+ #define SCRAM_COMMON_H
+ 
++#ifdef HAVE_OPENSSL
++#include <openssl/hmac.h>
++#endif
++
+ #include "common/sha2.h"
+ 
+ /* Name of SCRAM mechanisms */ 

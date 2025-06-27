@@ -1,5 +1,5 @@
 # Use the latest Alpine version
-FROM --platform=${TARGETPLATFORM} alpine:3.20 AS build_stage
+FROM alpine:3.20 AS build_stage
 
 # Install necessary build dependencies
 RUN apk --update --no-cache add \
@@ -14,21 +14,28 @@ RUN apk --update --no-cache add \
         make \
         openssl-dev \
         file \
-        pkgconf
+        pkgconf \
+        patch
 
 ARG PGBOUNCER_VERSION
 
-# Download, extract, and build PgBouncer
+# Download and extract PgBouncer
 RUN curl -Lso  "/tmp/pgbouncer.tar.gz" "https://pgbouncer.github.io/downloads/files/${PGBOUNCER_VERSION}/pgbouncer-${PGBOUNCER_VERSION}.tar.gz" && \
         file "/tmp/pgbouncer.tar.gz" && \
         mkdir /tmp/pgbouncer && \
-        tar -zxvf /tmp/pgbouncer.tar.gz -C /tmp/pgbouncer --strip-components 1 && \
-        cd /tmp/pgbouncer && \
-        ./configure --prefix=/usr && \
+        tar -zxvf /tmp/pgbouncer.tar.gz -C /tmp/pgbouncer --strip-components 1
+
+# Copy and apply FIPS compatibility patch
+COPY build/fips-compat.patch /tmp/fips-compat.patch
+WORKDIR /tmp/pgbouncer
+RUN patch -p1 < /tmp/fips-compat.patch
+
+# Configure and build PgBouncer with OpenSSL support for FIPS compatibility
+RUN ./configure --prefix=/usr --with-openssl --enable-debug && \
         make
 
 # Create runtime image
-FROM --platform=${TARGETPLATFORM} alpine:3.19
+FROM alpine:3.18
 
 # Install runtime dependencies
 RUN apk --update --no-cache add \
