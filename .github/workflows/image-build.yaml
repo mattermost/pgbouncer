@@ -15,6 +15,12 @@ jobs:
     steps:
       - name: checkout-project
         uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
+      - name: cd/Login to Chainguard Registry
+        uses: docker/login-action@3da7dc6e2b31f99ef2cb9fb4c50fb0971e0d0139 # v2.1.0
+        with:
+          registry: cgr.dev
+          username: ${{ secrets.CHAINGUARD_USERNAME }}
+          password: ${{ secrets.CHAINGUARD_PASSWORD }}
       - name: cd/Login to Docker Hub
         uses: docker/login-action@3da7dc6e2b31f99ef2cb9fb4c50fb0971e0d0139 # v2.1.0
         with:
@@ -25,6 +31,26 @@ jobs:
       - name: cd/Docker build and push
         env:
           TAG: ${{ github.ref_name }}
-          PGBOUNCER_VERSION: 1.22.0
+          PGBOUNCER_VERSION: 1.23.1
+          BUILD_DATE: ${{ github.run_number }}
+          GIT_COMMIT: ${{ github.sha }}
         run: |
-          docker buildx build --platform linux/amd64,linux/arm64 --push -t mattermost/pgbouncer:${TAG} build/. --build-arg PGBOUNCER_VERSION=${PGBOUNCER_VERSION}
+          # Build FIPS-compatible image with multiple tags
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --push \
+            --build-arg PGBOUNCER_VERSION=${PGBOUNCER_VERSION} \
+            --build-arg BUILD_DATE=${BUILD_DATE} \
+            --build-arg GIT_COMMIT=${GIT_COMMIT} \
+            --label "org.opencontainers.image.title=PgBouncer FIPS" \
+            --label "org.opencontainers.image.description=FIPS-compatible PgBouncer with OpenSSL support" \
+            --label "org.opencontainers.image.version=${PGBOUNCER_VERSION}" \
+            --label "org.opencontainers.image.created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --label "org.opencontainers.image.revision=${GIT_COMMIT}" \
+            --label "org.opencontainers.image.source=https://github.com/mattermost/pgbouncer" \
+            -t mattermost/pgbouncer:${TAG} \
+            -t mattermost/pgbouncer:${TAG}-fips \
+            -t mattermost/pgbouncer:${PGBOUNCER_VERSION}-fips \
+            -t mattermost/pgbouncer:latest-fips \
+            -f build/Dockerfile \
+            .
