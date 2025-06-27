@@ -18,8 +18,9 @@ DOCKERFILE="${4:-$DEFAULT_DOCKERFILE}"
 
 # Build configuration
 BUILD_DATE=$(date +%Y%m%d)
+DATETIME_STAMP=$(date +%d%H%M)  # Day-Hour-Minute format
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-FULL_TAG="${IMAGE_TAG}:${PGBOUNCER_VERSION}-fips-${BUILD_DATE}"
+FULL_TAG="${IMAGE_TAG}:${PGBOUNCER_VERSION}-fips-${BUILD_DATE}-${DATETIME_STAMP}"
 
 # Registry prefix if provided
 if [ -n "$REGISTRY" ]; then
@@ -37,6 +38,7 @@ echo "Image Tag:         $FULL_TAG"
 echo "Dockerfile:        $DOCKERFILE"
 echo "Platforms:         $PLATFORMS"
 echo "Build Date:        $BUILD_DATE"
+echo "Datetime Stamp:    $DATETIME_STAMP"
 echo "Git Commit:        $GIT_COMMIT"
 echo "=============================================="
 
@@ -168,25 +170,17 @@ fi
 if [ "$DOCKER_PUSH_ENABLED" = "true" ]; then
     echo "Creating additional tags..."
     
-    # Latest FIPS tag
-    LATEST_FIPS_TAG="${IMAGE_TAG}:latest-fips"
-    if [ -n "$REGISTRY" ]; then
-        LATEST_FIPS_TAG="${REGISTRY}/${LATEST_FIPS_TAG}"
-    fi
     
-    # Version FIPS tag (without date)
-    VERSION_FIPS_TAG="${IMAGE_TAG}:${PGBOUNCER_VERSION}-fips"
+    # Version FIPS tag (with datetime stamp)
+    VERSION_FIPS_TAG="v${IMAGE_TAG}:${PGBOUNCER_VERSION}-fips-${DATETIME_STAMP}"
     if [ -n "$REGISTRY" ]; then
         VERSION_FIPS_TAG="${REGISTRY}/${VERSION_FIPS_TAG}"
     fi
     
-    # Tag the image
-    docker tag "$FULL_TAG" "$LATEST_FIPS_TAG"
     docker tag "$FULL_TAG" "$VERSION_FIPS_TAG"
     
     # Push additional tags
     echo "Pushing additional tags..."
-    docker push "$LATEST_FIPS_TAG"
     docker push "$VERSION_FIPS_TAG"
 else
     echo "Skipping additional tag creation (no push access)"
