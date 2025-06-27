@@ -4,6 +4,18 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v1.23.1)'
+        required: true
+        default: 'v1.23.1'
+        type: string
+      pgbouncer_version:
+        description: 'PgBouncer version (e.g., 1.23.1)'
+        required: true
+        default: '1.23.1'
+        type: string
 
 permissions:
   contents: read
@@ -30,8 +42,8 @@ jobs:
         uses: docker/setup-buildx-action@11e8a2e2910826a92412015c515187a2d6750279 # v2.4
       - name: cd/Docker build and push
         env:
-          TAG: ${{ github.ref_name }}
-          PGBOUNCER_VERSION: 1.23.1
+          TAG: ${{ inputs.tag || github.ref_name }}
+          PGBOUNCER_VERSION: ${{ inputs.pgbouncer_version || '1.23.1' }}
           BUILD_DATE: ${{ github.run_number }}
           GIT_COMMIT: ${{ github.sha }}
         run: |
