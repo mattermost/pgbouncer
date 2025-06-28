@@ -1,5 +1,5 @@
 # Use Chainguard FIPS-compatible glibc base image for build stage
-FROM --platform=${TARGETPLATFORM} cgr.dev/mattermost.com/glibc-openssl-fips:14-dev AS build_stage
+FROM cgr.dev/mattermost.com/glibc-openssl-fips:14-dev AS build_stage
 
 # Switch to root for package installation
 USER root
@@ -40,13 +40,11 @@ RUN adduser -D postgres && \
     mkdir -p /etc/pgbouncer /var/log/pgbouncer /opt/pgbouncer && \
     chown -R postgres:postgres /etc/pgbouncer /var/log/pgbouncer /opt/pgbouncer
 
-# Copy the built pgbouncer and entrypoint to the final location
-COPY build/entrypoint.sh /opt/pgbouncer/entrypoint.sh
-RUN chown postgres:postgres /opt/pgbouncer/entrypoint.sh && \
-    chmod +x /opt/pgbouncer/entrypoint.sh
+# Setup directories and permissions
+# (entrypoint.sh not needed since we use direct binary execution)
 
 # Create runtime image using Chainguard FIPS-enabled glibc runtime (distroless)
-FROM --platform=${TARGETPLATFORM} cgr.dev/mattermost.com/glibc-openssl-fips:14
+FROM cgr.dev/mattermost.com/glibc-openssl-fips:14
 
 # Copy everything from build stage: user, directories, built binaries, and shared libraries
 COPY --from=build_stage /etc/passwd /etc/passwd
@@ -58,8 +56,6 @@ COPY --from=build_stage /tmp/pgbouncer/pgbouncer /opt/pgbouncer/pgbouncer
 # Copy required shared libraries for pgbouncer
 COPY --from=build_stage /usr/lib/libcares.so.2* /usr/lib/
 COPY --from=build_stage /usr/lib/libevent-2.1.so.7* /usr/lib/
-# Ensure entrypoint.sh is properly copied and executable
-COPY --from=build_stage /opt/pgbouncer/entrypoint.sh /opt/pgbouncer/entrypoint.sh
 
 # Switch to postgres user and set working directory
 USER postgres
